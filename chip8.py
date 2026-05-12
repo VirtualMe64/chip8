@@ -42,7 +42,7 @@ INSTRUCTIONS_PER_FRAME = 12
 
 SET_SHIFT = False
 
-class Chip8:
+class Processor:
     memory = [0 for _ in range(MEMORY_SIZE)]
     stack = []
     pc = ROM_START
@@ -54,39 +54,23 @@ class Chip8:
     i_register = 0
     registers = [0 for _ in range(REGISTER_COUNT)]
 
-    def __init__(self, rom_path):
+    def __init__(self):
         # store font sprites
         for i in range(len(FONT_DATA)):
             self.memory[FONT_DATA_POINTER + i] = FONT_DATA[i]
-        self.load_rom(rom_path)
+        
+    def load_rom(self, rom_data):
+        for i in range(len(rom_data)):
+            self.memory[ROM_START + i] = rom_data[i]
 
-        # create screen and start main loop
-        self.screen = pygame.display.set_mode((
-            DISPLAY_SIZE[0] * DISPLAY_PIXEL_WIDTH,
-            DISPLAY_SIZE[1] * DISPLAY_PIXEL_WIDTH
-        ))
-        clock = pygame.time.Clock()
-        while True:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    return
-            clock.tick(60)
+    def tick_timers(self):
+        if self.delay_timer > 0: self.delay_timer -= 1
+        if self.sound_timer > 0: self.sound_timer -= 1
 
-            # 1: update registers
-            if self.delay_timer > 0: self.delay_timer -= 1
-            if self.sound_timer > 0: self.sound_timer -= 1
-
-            for i in range(INSTRUCTIONS_PER_FRAME):
-                # 2a: fetch instruction
-                instruction = (self.memory[self.pc] << 8) + self.memory[self.pc + 1]
-                self.pc += 2
-
-                # 2b: decode and execute
-                self.execute(instruction)
-
-            # 3: display screen_data
-            self.draw_screen()
-            pygame.display.update()
+    def fetch(self):
+        instruction = (self.memory[self.pc] << 8) + self.memory[self.pc + 1]
+        self.pc += 2
+        return instruction
 
     def execute(self, instruction):
         def panic():
@@ -241,20 +225,46 @@ class Chip8:
             case _:
                 panic()
 
-    def load_rom(self, path):
-        with open(path, 'rb') as rom:
-            idx = ROM_START
+class Chip8:
+    def __init__(self, rom_path):
+        rom_bytes = []
+        with open(rom_path, 'rb') as rom:
             while (byte := rom.read(1)):
-                self.memory[idx] = int.from_bytes(byte)
-                idx += 1
+                rom_bytes.append(int.from_bytes(byte))
 
-    def draw_screen(self):
+        processor = Processor()
+        processor.load_rom(rom_bytes)
+
+        # create screen and start main loop
+        self.screen = pygame.display.set_mode((
+            DISPLAY_SIZE[0] * DISPLAY_PIXEL_WIDTH,
+            DISPLAY_SIZE[1] * DISPLAY_PIXEL_WIDTH
+        ))
+        clock = pygame.time.Clock()
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return
+            clock.tick(60)
+
+            # 1: update registers
+            processor.tick_timers()
+
+            for _ in range(INSTRUCTIONS_PER_FRAME):
+                processor.execute(processor.fetch())
+
+            # 3: display screen_data
+            self.draw_screen(processor.screen_data)
+            pygame.display.update()
+
+    def draw_screen(self, screen_data):
         for col in range(DISPLAY_SIZE[0]):
             for row in range(DISPLAY_SIZE[1]):
-                color = COLOR_1 if self.screen_data[row][col] else COLOR_0
+                color = COLOR_1 if screen_data[row][col] else COLOR_0
                 x = col * DISPLAY_PIXEL_WIDTH
                 y = row * DISPLAY_PIXEL_WIDTH
                 pygame.draw.rect(self.screen, color, [x, y, x + DISPLAY_PIXEL_WIDTH, y + DISPLAY_PIXEL_WIDTH])
+
 
 if __name__ == "__main__":
     import sys

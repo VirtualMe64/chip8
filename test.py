@@ -1,0 +1,124 @@
+import unittest
+from chip8 import Processor
+
+def split_instructions(program):
+    out = []
+    for inst in program:
+        out.append(inst >> 8)
+        out.append(inst & 0xFF)
+    return out
+
+def setup_registers(registers):
+    def hook(processor):
+        for x, y in registers.items():
+            processor.registers[x] = y
+    return hook
+
+class Chip8Test(unittest.TestCase):
+    def program_test(
+            self, 
+            program, 
+            expected_register_values = None,
+            expected_pc = None,
+            stack_test = None,
+            screen_test = None, 
+            setup_hook = None, 
+            max_steps = 1000
+    ):
+        # executes program and checks if output matches expectation
+        processor = Processor()
+        processor.load_rom(split_instructions(program))
+        
+        if setup_hook is not None:
+            setup_hook(processor)
+
+        i = 0
+        while 512 <= processor.pc <= 512 + ((len(program) - 1) * 2) and i < max_steps:
+            processor.execute(processor.fetch())
+            if i % 10 == 0:
+                processor.tick_timers()
+            i += 1
+
+        if expected_pc is not None:
+            self.assertEqual(processor.pc, expected_pc)
+
+        if stack_test is not None:
+            stack_test(processor.stack)
+
+        if screen_test is not None:
+            screen_test(processor.screen_data)
+
+        self.assertEqual(1, 1)
+
+class TestClearScreen(Chip8Test):
+    def test_clears(self):
+        program = [0x00E0]
+
+        def screen_setup(processor : Processor):
+            processor.screen_data[0][0] = True
+
+        def screen_test(screen_data):
+            self.assertFalse(any(any(row) for row in screen_data))
+
+        self.program_test(program, setup_hook = screen_setup, screen_test=screen_test)
+
+class TestJump(Chip8Test):
+    def test_jumps(self):
+        program = [0x1001] # jump to 1
+        self.program_test(program, expected_pc=0x1)
+
+class TestSubroutines(Chip8Test):
+    def test_jumps(self):
+        # call a subroutine which jumps to 2
+        program = [0x2204, 0x1001, 0x1002]
+        self.program_test(program, expected_pc=2)
+
+    def test_returns(self):
+        # call a subroutine which immediately returns, then jump to 1
+        program = [0x2204, 0x1001, 0x00EE, 0x1002]
+        self.program_test(program, expected_pc=1)
+
+    def test_stack_pop(self):
+        program = [0x2204, 0x1001, 0x00EE, 0x1002]
+        self.program_test(program, stack_test=lambda stack : self.assertEqual(len(stack), 0))
+    
+    def test_stack_push(self):
+        # calls a subroutine which exits
+        program = [0x2202, 0x1001]
+        def stack_test(stack):
+            self.assertEqual(len(stack), 1)
+            self.assertEqual(stack[0], 0x202)
+        self.program_test(program, stack_test=stack_test)
+
+class TestConditionalSkips(Chip8Test):
+    def test_3x_skips(self):
+        program = [0x3142] # skip if register 1 = 0x42
+        self.program_test(program, setup_hook=setup_registers({1: 0x42}), expected_pc=0x204)
+    
+    def test_3x_doesnt_skip(self):
+        program = [0x3142] # skip if register 1 = 0x42
+        self.program_test(program, setup_hook=setup_registers({1: 0x43}), expected_pc=0x202)
+
+    def test_4x_skips(self):
+        program = [0x4142] # skip if register 1 != 0x42
+        self.program_test(program, setup_hook=setup_registers({1: 0x43}), expected_pc=0x204)
+    
+    def test_4x_doesnt_skip(self):
+        program = [0x4142] # skip if register 1 != 0x42
+        self.program_test(program, setup_hook=setup_registers({1: 0x42}), expected_pc=0x202)
+
+    def test_5x_skips(self):
+        program = [0x5120] # skip if register 1 == register 2
+        self.program_test(program, setup_hook=setup_registers({1: 0x42, 2: 0x42}), expected_pc=0x204)
+    
+    def test_5x_doesnt_skip(self):
+        program = [0x5120] # skip if register 1 == register 2
+        self.program_test(program, setup_hook=setup_registers({1: 0x42, 2: 0x43}), expected_pc=0x202)
+
+    def test_9x_skips(self):
+        program = [0x5120] # skip if register 1 == register 2
+        self.program_test(program, setup_hook=setup_registers({1: 0x42, 2: 0x42}), expected_pc=0x204)
+    
+    def test_9x_doesnt_skip(self):
+        program = [0x5120] # skip if register 1 == register 2
+        self.program_test(program, setup_hook=setup_registers({1: 0x42, 2: 0x43}), expected_pc=0x202)
