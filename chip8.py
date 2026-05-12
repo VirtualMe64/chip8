@@ -1,4 +1,5 @@
 import pygame
+import keyboard
 import random
 
 MEMORY_SIZE = 4096 # memory size in bytes
@@ -31,10 +32,10 @@ FONT_DATA = [
 FONT_DATA_POINTER = 0x50
 
 KEYCODES = [
-    pygame.K_0, pygame.K_1, pygame.K_2, pygame.K_3,
-    pygame.K_q, pygame.K_w, pygame.K_e, pygame.K_r,
-    pygame.K_a, pygame.K_s, pygame.K_d, pygame.K_f,
-    pygame.K_z, pygame.K_x, pygame.K_c, pygame.K_v,
+    '0', '1', '2', '3',
+    'q', 'w', 'e', 'r',
+    'a', 's', 'd', 'f',
+    'z', 'x', 'c', 'v',
 ]
 
 FPS = 60
@@ -51,6 +52,7 @@ class Processor:
         self.pc = ROM_START
 
         self.screen_data = [[False for _ in range(DISPLAY_SIZE[0])] for _ in range(DISPLAY_SIZE[1])]
+        self.screen_changes = []
 
         self.delay_timer = 0
         self.sound_timer = 0
@@ -181,15 +183,16 @@ class Processor:
                             if curr: # set flag register if pixels turned off
                                 self.registers[-1] = 1
                             self.screen_data[y_pixel][x_pixel] = not curr
+                            self.screen_changes.append((x_pixel, y_pixel))
 
             case 0xE:
                 if nn == 0x9E: # skip if key currently pressed
                     target_key = KEYCODES[self.registers[x]]
-                    if pygame.key.get_pressed()[target_key]:
+                    if keyboard.is_pressed(target_key):
                         self.pc += 2
                 elif nn == 0xA1:
                     target_key = KEYCODES[self.registers[x]]
-                    if not pygame.key.get_pressed()[target_key]:
+                    if not keyboard.is_pressed(target_key):
                         self.pc += 2
                 else:
                     panic()
@@ -206,10 +209,10 @@ class Processor:
                         self.i_register += self.registers[x]
                     case 0x0A:
                         target_key = KEYCODES[self.registers[x]]
-                        if not pygame.key.get_pressed()[target_key]:
+                        if not keyboard.is_pressed(target_key):
                             self.pc -= 2
                     case 0x29:
-                        self.i_register = FONT_DATA_POINTER + self.registers[x]
+                        self.i_register = FONT_DATA_POINTER + self.registers[x] * 5
                     case 0x33:
                         val = self.registers[x]
                         for i in range(3):
@@ -242,12 +245,14 @@ class Chip8:
             DISPLAY_SIZE[0] * DISPLAY_PIXEL_WIDTH,
             DISPLAY_SIZE[1] * DISPLAY_PIXEL_WIDTH
         ))
+        self.screen.fill(COLOR_0)
         clock = pygame.time.Clock()
         while True:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     return
             clock.tick(60)
+            print(clock.get_fps())
 
             # 1: update registers
             processor.tick_timers()
@@ -256,16 +261,18 @@ class Chip8:
                 processor.execute(processor.fetch())
 
             # 3: display screen_data
-            self.draw_screen(processor.screen_data)
+            if len(processor.screen_changes) > 0:
+                self.draw_screen(processor.screen_data, processor.screen_changes)
+                processor.screen_changes.clear()
+
             pygame.display.update()
 
-    def draw_screen(self, screen_data):
-        for col in range(DISPLAY_SIZE[0]):
-            for row in range(DISPLAY_SIZE[1]):
-                color = COLOR_1 if screen_data[row][col] else COLOR_0
-                x = col * DISPLAY_PIXEL_WIDTH
-                y = row * DISPLAY_PIXEL_WIDTH
-                pygame.draw.rect(self.screen, color, [x, y, x + DISPLAY_PIXEL_WIDTH, y + DISPLAY_PIXEL_WIDTH])
+    def draw_screen(self, screen_data, screen_changes):
+        for (col, row) in screen_changes:
+            color = COLOR_1 if screen_data[row][col] else COLOR_0
+            x = col * DISPLAY_PIXEL_WIDTH
+            y = row * DISPLAY_PIXEL_WIDTH
+            pygame.draw.rect(self.screen, color, [x, y, DISPLAY_PIXEL_WIDTH, DISPLAY_PIXEL_WIDTH])
 
 
 if __name__ == "__main__":

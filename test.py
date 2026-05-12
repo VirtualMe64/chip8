@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch
-from chip8 import Processor
+from chip8 import Processor, KEYCODES
 
 def split_instructions(program):
     out = []
@@ -370,3 +370,27 @@ class TestDisplay(Chip8Test):
             screen_test=screen_test,
             setup_hook=setup
         )
+
+class TestKeyConditionalSkips(Chip8Test):
+    # patching so it looks like key corresponding to index 4 is always pressed
+    @patch('keyboard.is_pressed', side_effect=lambda x : True if x == KEYCODES[4] else False)
+    def test_9e_skip(self, mock_get_pressed):
+        program = [0xE19E] # skip if key corresponding to reg 1 is pressed
+        self.program_test(program, setup_hook=setup_registers({1: 0x4}), expected_pc=0x204)
+
+    @patch('keyboard.is_pressed', side_effect=lambda x : True if x == KEYCODES[4] else False)
+    def test_9e_dont_skip(self, mock_get_pressed):
+        program = [0xE19E] # skip if key corresponding to reg 1 is pressed
+        self.program_test(program, setup_hook=setup_registers({1: 0x3}), expected_pc=0x202)
+
+    @patch('keyboard.is_pressed', side_effect=lambda x : True if x == KEYCODES[4] else False)
+    def test_a1_skip(self, mock_get_pressed):
+        program = [0xE1A1] # skip if key corresponding to reg 1 isn't pressed
+        self.program_test(program, setup_hook=setup_registers({1: 0x3}), expected_pc=0x204)
+
+    @patch('keyboard.is_pressed', side_effect=lambda x : True if x == KEYCODES[4] else False)
+    def test_a1_dont_skip(self, mock_get_pressed):
+        program = [0xE1A1] # skip if key corresponding to reg 1 isn't pressed
+        self.program_test(program, setup_hook=setup_registers({1: 0x4}), expected_pc=0x202)
+
+# class TestDelayTimer(Chip8Test):
