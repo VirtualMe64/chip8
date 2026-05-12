@@ -31,12 +31,7 @@ FONT_DATA = [
 ]
 FONT_DATA_POINTER = 0x50
 
-KEYCODES = [
-    '0', '1', '2', '3',
-    'q', 'w', 'e', 'r',
-    'a', 's', 'd', 'f',
-    'z', 'x', 'c', 'v',
-]
+KEYCODES = ['x', '1', '2', '3', 'q', 'w', 'e', 'a', 's', 'd', 'z', 'c', '4', 'r', 'f', 'v']
 
 FPS = 60
 INSTRUCTIONS_PER_FRAME = 12
