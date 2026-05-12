@@ -40,7 +40,9 @@ KEYCODES = [
 FPS = 60
 INSTRUCTIONS_PER_FRAME = 12
 
+# ambiguous opcodes
 SET_SHIFT = False
+JUMP_WITH_OFFSET_VX = False
 
 class Processor:
     def __init__(self):
@@ -130,21 +132,21 @@ class Processor:
                     case 4:
                         self.registers[x] += self.registers[y]
                         self.registers[-1] = 1 if self.registers[x] > 255 else 0
-                        self.registers[x] %= 255
+                        self.registers[x] %= 256
                     case 5:
-                        self.registers[-1] = 1 if self.registers[x] > self.registers[y] else 0
-                        self.registers[x] = self.registers[x] - self.registers[y]
+                        self.registers[-1] = 1 if self.registers[x] >= self.registers[y] else 0
+                        self.registers[x] = (self.registers[x] - self.registers[y]) % 256
                     case 7:
-                        self.registers[-1] = 1 if self.registers[y] > self.registers[x] else 0
-                        self.registers[x] = self.registers[y] - self.registers[x]
+                        self.registers[-1] = 1 if self.registers[y] >= self.registers[x] else 0
+                        self.registers[x] = (self.registers[y] - self.registers[x]) % 256
                     case 6:
                         if SET_SHIFT: self.registers[x] = self.registers[y]
                         self.registers[-1] = self.registers[x] & 0x1
                         self.registers[x] >>= 1
                     case 0xE:
                         if SET_SHIFT: self.registers[x] = self.registers[y]
-                        self.registers[-1] = self.registers[x] >> 15
-                        self.registers[x] <<= 1
+                        self.registers[-1] = self.registers[x] >> 7
+                        self.registers[x] = (self.registers[x] << 1) % 256
                     case _:
                         panic()
 
@@ -152,7 +154,7 @@ class Processor:
                 self.i_register = nnn
 
             case 0xB: # jump with offset
-                self.pc = nnn + self.registers[0]
+                self.pc = nnn + self.registers[x if JUMP_WITH_OFFSET_VX else 0]
 
             case 0xC: # random
                 rand_num = random.randint(0, 255)
