@@ -1,4 +1,5 @@
 import pygame
+import random
 
 MEMORY_SIZE = 4096 # memory size in bytes
 ROM_START = 512
@@ -38,6 +39,8 @@ KEYCODES = [
 
 FPS = 60
 INSTRUCTIONS_PER_FRAME = 12
+
+SET_SHIFT = False
 
 class Chip8:
     memory = [0 for _ in range(MEMORY_SIZE)]
@@ -86,6 +89,9 @@ class Chip8:
             pygame.display.update()
 
     def execute(self, instruction):
+        def panic():
+            print(f"Invalid instruction 0x{hex(opcode)[2:]}{hex(x)[2:]}{hex(y)[2:]}{hex(n)[2:]}")
+
         opcode = instruction >> 12  # first nibble, used to specify instruction
         x = (instruction >> 8) & 0xF # second nibble, used to index registers 
         y = (instruction >> 4) & 0xF # third nibble, used to index registers
@@ -97,14 +103,77 @@ class Chip8:
             case 0:
                 if opcode == 0x00E0: # clear screen
                     self.screen_data = [[False for _ in range(DISPLAY_SIZE[0])] for _ in range(DISPLAY_SIZE[1])]
+                if opcode == 0x00EE: # ret
+                    pc = self.stack.pop()
+
             case 1: # jump to nnn
                 self.pc = nnn
+
+            case 2: # call subroutine
+                self.stack.append(self.pc)
+                self.pc = nn
+
+            case 3: # skip if register x equals nn
+                if self.registers[x] == nn: self.pc += 2
+
+            case 4: # skip if register x dne nn
+                if self.registers[x] != nn: self.pc += 2
+
+            case 5: # skip if register x equals y
+                if n != 0:
+                    panic()
+                    return
+                if self.registers[x] == self.registers[y]: self.pc += 1
+
+            case 9: # skip if register x dne y
+                if n != 0:
+                    panic()
+                    return
+                if self.registers[x] != self.registers[y]: self.pc += 1
+
             case 6: # set register x to nn
                 self.registers[x] = nn
+
             case 7: # add nn to register x
                 self.registers[x] = (self.registers[x] + nn) % 256
+
+            case 8: # arithmetic instructions
+                match n:
+                    case 0: self.registers[x] = self.registers[y]
+                    case 1: self.registers[x] |= self.registers[y]
+                    case 2: self.registers[x] &= self.registers[y]
+                    case 3: self.registers[x] ^= self.registers[y]
+                    case 4:
+                        self.registers[x] += self.registers[y]
+                        self.registers[-1] = 1 if self.registers[x] > 255 else 0
+                        self.registers[x] %= 255
+                    case 5:
+                        self.registers[-1] = 1 if self.registers[x] > self.registers[y] else 0
+                        self.registers[x] = self.registers[x] - self.registers[y]
+                    case 7:
+                        self.registers[-1] = 1 if self.registers[y] > self.registers[x] else 0
+                        self.registers[x] = self.registers[y] - self.registers[x]
+                    case 6:
+                        if SET_SHIFT: self.registers[x] = self.registers[y]
+                        self.registers[-1] = self.registers[x] & 0x1
+                        self.registers[x] >>= 1
+                    case 0xE:
+                        if SET_SHIFT: self.registers[x] = self.registers[y]
+                        self.registers[-1] = self.registers[x] >> 15
+                        self.registers[x] <<= 1
+                    case _:
+                        panic()
+
             case 0xA: # set the index register to nnn
                 self.i_register = nnn
+
+            case 0xB: # jump with offset
+                self.pc = nnn + self.registers[0]
+
+            case 0xC: # random
+                rand_num = random.randint(0, 255)
+                self.registers[x] = rand_num & nn
+
             case 0xD: # draw an n pixel tall sprite from memory location I at x = register x, y = register y
                 x_val = self.registers[x] % DISPLAY_SIZE[0]
                 y_val = self.registers[y] % DISPLAY_SIZE[1]
@@ -127,8 +196,50 @@ class Chip8:
                             self.screen_data[y_pixel][x_pixel] = not curr
                         byte >>= 1
 
+            case 0xE:
+                if nn == 0x9E: # skip if key currently pressed
+                    target_key = KEYCODES[self.registers[x]]
+                    if pygame.key.get_pressed()[target_key]:
+                        self.pc += 2
+                elif nn == 0xA1:
+                    target_key = KEYCODES[self.registers[x]]
+                    if not pygame.key.get_pressed()[target_key]:
+                        self.pc += 2
+                else:
+                    panic()
+
+            case 0xF:
+                match nn:
+                    case 0x07:
+                        self.registers[x] = self.delay_timer
+                    case 0x15:
+                        self.delay_timer = self.registers[x]
+                    case 0x18:
+                        self.sound_timer = self.registers[x]
+                    case 0x1E:
+                        self.i_register += self.registers[x]
+                    case 0x0A:
+                        target_key = KEYCODES[self.registers[x]]
+                        if not pygame.key.get_pressed()[target_key]:
+                            self.pc -= 2
+                    case 0x29:
+                        self.i_register = FONT_DATA_POINTER + self.registers[x]
+                    case 0x33:
+                        val = self.registers[x]
+                        for i in range(3):
+                            self.memory[self.i_register + (2 - i)] = val % 10
+                            val //= 10
+                    case 0x55:
+                        for i in range(x + 1):
+                            self.memory[self.i_register + i] = self.registers[i]
+                    case 0x65:
+                        for i in range(x + 1):
+                            self.registers[i] = self.memory[self.i_register + i]
+                    case _:
+                        panic()
+
             case _:
-                print(f"Unknown instruction 0x{hex(opcode)[2:]}{hex(x)[2:]}{hex(y)[2:]}{hex(n)[2:]}")
+                panic()
 
     def load_rom(self, path):
         with open(path, 'rb') as rom:
