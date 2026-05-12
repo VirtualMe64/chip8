@@ -43,18 +43,18 @@ INSTRUCTIONS_PER_FRAME = 12
 SET_SHIFT = False
 
 class Processor:
-    memory = [0 for _ in range(MEMORY_SIZE)]
-    stack = []
-    pc = ROM_START
-
-    screen_data = [[False for _ in range(DISPLAY_SIZE[0])] for _ in range(DISPLAY_SIZE[1])]
-
-    delay_timer = 0
-    sound_timer = 0
-    i_register = 0
-    registers = [0 for _ in range(REGISTER_COUNT)]
-
     def __init__(self):
+        self.memory = [0 for _ in range(MEMORY_SIZE)]
+        self.stack = []
+        self.pc = ROM_START
+
+        self.screen_data = [[False for _ in range(DISPLAY_SIZE[0])] for _ in range(DISPLAY_SIZE[1])]
+
+        self.delay_timer = 0
+        self.sound_timer = 0
+        self.i_register = 0
+        self.registers = [0 for _ in range(REGISTER_COUNT)]
+
         # store font sprites
         for i in range(len(FONT_DATA)):
             self.memory[FONT_DATA_POINTER + i] = FONT_DATA[i]
@@ -82,20 +82,20 @@ class Processor:
         n = instruction & 0xF # fourth nibble
         nn = instruction & 0xFF # second byte
         nnn = instruction & 0xFFF # last 3 nibbles
-        
+
         match opcode:
             case 0:
-                if opcode == 0x00E0: # clear screen
+                if nn == 0xE0: # clear screen
                     self.screen_data = [[False for _ in range(DISPLAY_SIZE[0])] for _ in range(DISPLAY_SIZE[1])]
-                if opcode == 0x00EE: # ret
-                    pc = self.stack.pop()
+                if nn == 0xEE: # ret
+                    self.pc = self.stack.pop()
 
             case 1: # jump to nnn
                 self.pc = nnn
 
             case 2: # call subroutine
                 self.stack.append(self.pc)
-                self.pc = nn
+                self.pc = nnn
 
             case 3: # skip if register x equals nn
                 if self.registers[x] == nn: self.pc += 2
@@ -107,13 +107,13 @@ class Processor:
                 if n != 0:
                     panic()
                     return
-                if self.registers[x] == self.registers[y]: self.pc += 1
+                if self.registers[x] == self.registers[y]: self.pc += 2
 
             case 9: # skip if register x dne y
                 if n != 0:
                     panic()
                     return
-                if self.registers[x] != self.registers[y]: self.pc += 1
+                if self.registers[x] != self.registers[y]: self.pc += 2
 
             case 6: # set register x to nn
                 self.registers[x] = nn
