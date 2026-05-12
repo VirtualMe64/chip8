@@ -170,17 +170,17 @@ class Processor:
                     for offset in range(8):
                         x_pixel = x_val + 7 - offset
                         y_pixel = y_val + row
+                        val = byte % 2
+                        byte >>= 1
 
-                        if x_pixel >= DISPLAY_SIZE[0]: break
-                        if y_pixel >= DISPLAY_SIZE[1]: break
-
+                        if x_pixel >= DISPLAY_SIZE[0]: continue
+                        if y_pixel >= DISPLAY_SIZE[1]: continue
                         
-                        if byte % 2 == 1:
+                        if val == 1:
                             curr = self.screen_data[y_pixel][x_pixel]
                             if curr: # set flag register if pixels turned off
                                 self.registers[-1] = 1
                             self.screen_data[y_pixel][x_pixel] = not curr
-                        byte >>= 1
 
             case 0xE:
                 if nn == 0x9E: # skip if key currently pressed

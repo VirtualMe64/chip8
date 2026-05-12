@@ -265,3 +265,108 @@ class TestRandom(Chip8Test):
     def test_random_value(self, mock_randint):
         program = [0xC1FF] # set reg 1 to rand & 00
         self.program_test(program, expected_register_values={1: 0x42})
+
+class TestDisplay(Chip8Test):
+    def test_basic_draw(self):
+        program = [0xA000, 0xD122] # draw a two row high sprite (at mem 0) at x = register 1, y = register 2
+        
+        def setup(processor : Processor):
+            processor.registers[1] = 1
+            processor.registers[2] = 1
+            processor.memory[0] = 0xFF
+            processor.memory[1] = 0x81
+
+        def screen_test(screen):
+            expected_screen = [
+                [False if c == '0' else True for c in '0000000000'],
+                [False if c == '0' else True for c in '0111111110'],
+                [False if c == '0' else True for c in '0100000010'],
+                [False if c == '0' else True for c in '0000000000'],
+            ]
+            for y in range(len(expected_screen)):
+                for x in range(len(expected_screen[0])):
+                    self.assertEqual(screen[y][x], expected_screen[y][x])
+
+        self.program_test(
+            program,
+            screen_test=screen_test,
+            setup_hook=setup
+        )
+    
+    def test_draw_1_row(self):
+        program = [0xA000, 0xD121] # draw a one row high sprite (at mem 0) at x = register 1, y = register 2
+        
+        def setup(processor : Processor):
+            processor.registers[1] = 1
+            processor.registers[2] = 1
+            processor.memory[0] = 0xFF
+            processor.memory[1] = 0x81
+
+        def screen_test(screen):
+            expected_screen = [
+                [False if c == '0' else True for c in '0000000000'],
+                [False if c == '0' else True for c in '0111111110'],
+                [False if c == '0' else True for c in '0000000000'],
+                [False if c == '0' else True for c in '0000000000'],
+            ]
+            for y in range(len(expected_screen)):
+                for x in range(len(expected_screen[0])):
+                    self.assertEqual(screen[y][x], expected_screen[y][x])
+
+        self.program_test(
+            program,
+            screen_test=screen_test,
+            setup_hook=setup
+        )
+
+    def test_draw_modulo(self):
+        program = [0xA000, 0xD122] # draw a two row high sprite (at mem 0) at x = register 1, y = register 2
+        
+        def setup(processor : Processor):
+            processor.registers[1] = 65
+            processor.registers[2] = 33
+            processor.memory[0] = 0xFF
+            processor.memory[1] = 0x81
+
+        def screen_test(screen):
+            expected_screen = [
+                [False if c == '0' else True for c in '0000000000'],
+                [False if c == '0' else True for c in '0111111110'],
+                [False if c == '0' else True for c in '0100000010'],
+                [False if c == '0' else True for c in '0000000000'],
+            ]
+            for y in range(len(expected_screen)):
+                for x in range(len(expected_screen[0])):
+                    self.assertEqual(screen[y][x], expected_screen[y][x])
+
+        self.program_test(
+            program,
+            screen_test=screen_test,
+            setup_hook=setup
+        )
+    
+    def test_draw_cutoff(self):
+        program = [0xA000, 0xD122] # draw a two row high sprite (at mem 0) at x = register 1, y = register 2
+        
+        def setup(processor : Processor):
+            processor.registers[1] = 62
+            processor.registers[2] = 30
+            processor.memory[0] = 0xFF
+            processor.memory[1] = 0x81
+
+        def screen_test(screen):
+            screen_segment = [row[-3:] for row in screen[-3:]]
+            expected_screen = [
+                [False if c == '0' else True for c in '000'],
+                [False if c == '0' else True for c in '011'],
+                [False if c == '0' else True for c in '010']
+            ]
+            for y in range(len(expected_screen)):
+                for x in range(len(expected_screen[0])):
+                    self.assertEqual(screen_segment[y][x], expected_screen[y][x])
+
+        self.program_test(
+            program,
+            screen_test=screen_test,
+            setup_hook=setup
+        )
